@@ -22,18 +22,15 @@ services:
       - key: OWNER_ID
         sync: false
 
-      # Redis connection (auto injected from redis service)
       - key: REDIS_URL
         fromService:
           type: redis
           name: music-bot-redis
           property: connectionString
 
-      # Optional (only if you use Sentry)
       - key: SENTRY_DSN
         sync: false
 
-      # Port for health check / web runtime
       - key: PORT
         value: "8080"
 
@@ -47,9 +44,14 @@ services:
       sizeGB: 1
 
   # =========================
-  # Redis Service
+  # Redis Service (FIXED)
   # =========================
   - type: redis
     name: music-bot-redis
     plan: starter
     region: oregon
+
+    # 🔴 REQUIRED by Render
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Allow all services (can restrict later)
