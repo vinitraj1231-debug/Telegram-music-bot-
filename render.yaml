@@ -22,12 +22,14 @@ services:
       - key: OWNER_ID
         sync: false
 
+      # Redis auto connection
       - key: REDIS_URL
         fromService:
           type: redis
           name: music-bot-redis
           property: connectionString
 
+      # Optional error monitoring
       - key: SENTRY_DSN
         sync: false
 
@@ -38,20 +40,14 @@ services:
     autoDeploy: true
     numInstances: 1
 
-    disk:
-      name: bot-storage
-      mountPath: /tmp
-      sizeGB: 1
-
   # =========================
-  # Redis Service (FIXED)
+  # Redis Service (Required)
   # =========================
   - type: redis
     name: music-bot-redis
     plan: starter
     region: oregon
 
-    # 🔴 REQUIRED by Render
     ipAllowList:
       - source: 0.0.0.0/0
-        description: Allow all services (can restrict later)
+        description: Allow all (free tier)
