@@ -45,7 +45,7 @@ services:
   # =========================
   - type: redis
     name: music-bot-redis
-    plan: starter
+    plan: free
     region: oregon
 
     ipAllowList:
