@@ -1,7 +1,8 @@
 """
-Telegram Music Assistant - Production Ready
+Telegram Music Assistant - Production Ready v2.0
 High-performance voice chat music streaming bot
 Target: <3s cold start, <1s warm playback
+Fixed: All compatibility issues resolved
 """
 
 import asyncio
@@ -10,22 +11,20 @@ import os
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional
 
 import yt_dlp
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, UserAlreadyParticipant
-from pyrogram.types import (
-    Message,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
-)
-
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pytgcalls import PyTgCalls
-from pytgcalls.types import Update
-
+from pytgcalls.types import MediaStream, AudioQuality
+from pytgcalls.exceptions import (
+    AlreadyJoinedError,
+    NotInCallError,
+    NoActiveGroupCall,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -67,8 +66,8 @@ assistant = Client(
     workers=4
 )
 
-# PyTgCalls instance
-calls = PyTgCalls(assistant, cache_duration=100)
+# PyTgCalls instance - Updated for compatibility
+calls = PyTgCalls(assistant)
 
 # Global state management
 class QueueManager:
@@ -110,7 +109,7 @@ class QueueManager:
 
 queue_manager = QueueManager()
 
-# YT-DLP optimized configuration for ultra-fast extraction
+# YT-DLP optimized configuration
 YDL_OPTS = {
     'format': 'bestaudio/best',
     'outtmpl': '%(id)s.%(ext)s',
@@ -120,17 +119,13 @@ YDL_OPTS = {
     'quiet': True,
     'extractaudio': True,
     'cookiefile': None,
-    'socket_timeout': 10,
+    'socket_timeout': 15,
     'retries': 3,
     'fragment_retries': 3,
-    'concurrent_fragment_downloads': 5,
-    'http_chunk_size': 10485760,  # 10MB chunks
-    'source_address': '0.0.0.0',
+    'http_chunk_size': 10485760,
     'geo_bypass': True,
     'age_limit': None,
-    'nocache': True,
-    'noplaylist': False,
-    'extract_flat': 'in_playlist',
+    'noplaylist': True,
 }
 
 async def extract_info_fast(query: str) -> Optional[dict]:
@@ -185,60 +180,57 @@ async def extract_info_fast(query: str) -> Optional[dict]:
         logger.error(f"Extraction error: {e}")
         return None
 
-async def join_call(chat_id: int) -> bool:
-    """Join voice chat with retry logic"""
+async def join_call(chat_id: int, track: dict) -> bool:
+    """Join voice chat and start playing"""
     try:
-        await calls.join_group_call(
-            chat_id,
-            AudioPiped('http://127.0.0.1/silent.mp3'),  # Silent placeholder
-            stream_type=StreamType().pulse_stream
+        # Create media stream with optimized settings
+        stream = MediaStream(
+            track['url'],
+            audio_parameters=AudioQuality.HIGH,
         )
-        logger.info(f"✅ Joined call in {chat_id}")
+        
+        await calls.play(chat_id, stream)
+        logger.info(f"✅ Joined call and started playing in {chat_id}")
         return True
+        
     except AlreadyJoinedError:
-        return True
+        # Already in call, just change stream
+        try:
+            stream = MediaStream(
+                track['url'],
+                audio_parameters=AudioQuality.HIGH,
+            )
+            await calls.play(chat_id, stream)
+            logger.info(f"✅ Changed stream in {chat_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Stream change error: {e}")
+            return False
+            
     except NoActiveGroupCall:
         logger.warning(f"No active group call in {chat_id}")
         return False
+        
     except Exception as e:
-        logger.error(f"Join error in {chat_id}: {e}")
+        logger.error(f"Join/Play error in {chat_id}: {e}")
         return False
 
 async def play_track(chat_id: int, track: dict):
     """
     Start streaming with minimal latency
-    Uses FFmpeg piping for zero-download streaming
     """
     try:
-        # FFmpeg optimized for low latency streaming
-        ffmpeg_params = AudioPiped(
-            track['url'],
-            audio_parameters={
-                'bitrate': 128000,
-                'buffer_size': 512000,
-                'threads': 2,
-            },
-            additional_ffmpeg_parameters=(
-                '-reconnect 1 '
-                '-reconnect_streamed 1 '
-                '-reconnect_delay_max 5 '
-                '-fflags +genpts+discardcorrupt '
-                '-analyzeduration 1M '
-                '-probesize 1M '
-                '-thread_queue_size 512'
-            )
-        )
+        # Join and play
+        success = await join_call(chat_id, track)
         
-        await calls.change_stream(chat_id, ffmpeg_params)
-        queue_manager.set_current(chat_id, track)
-        queue_manager.paused[chat_id] = False
+        if success:
+            queue_manager.set_current(chat_id, track)
+            queue_manager.paused[chat_id] = False
+            logger.info(f"🎵 Now playing in {chat_id}: {track['title']}")
+        else:
+            # Try next track
+            await skip_track(chat_id)
         
-        logger.info(f"🎵 Now playing in {chat_id}: {track['title']}")
-        
-    except NotInCallError:
-        # Auto-join if not in call
-        if await join_call(chat_id):
-            await play_track(chat_id, track)
     except Exception as e:
         logger.error(f"Playback error in {chat_id}: {e}")
         await skip_track(chat_id)
@@ -251,7 +243,7 @@ async def skip_track(chat_id: int):
         await play_track(chat_id, next_track)
     else:
         try:
-            await calls.leave_group_call(chat_id)
+            await calls.leave_call(chat_id)
             queue_manager.clear(chat_id)
             logger.info(f"Queue ended, left call in {chat_id}")
         except Exception as e:
@@ -259,18 +251,18 @@ async def skip_track(chat_id: int):
 
 # Stream ended callback
 @calls.on_stream_end()
-async def on_stream_end(client: PyTgCalls, update: Update):
+async def on_stream_end(client, update):
     """Auto-play next track when current ends"""
     chat_id = update.chat_id
     logger.info(f"Stream ended in {chat_id}, playing next...")
     await skip_track(chat_id)
 
 # Inline keyboard helpers
-def get_welcome_keyboard():
+def get_welcome_keyboard(bot_username: str):
     """High-quality welcome message keyboard"""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{bot.me.username}?startgroup=true"),
+            InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{bot_username}?startgroup=true"),
             InlineKeyboardButton("❓ Help", callback_data="help")
         ],
         [
@@ -302,6 +294,8 @@ def get_playback_keyboard(chat_id: int):
 @bot.on_message(filters.command("start") & filters.private)
 async def start_handler(client: Client, message: Message):
     """Welcome message with inline controls"""
+    bot_info = await client.get_me()
+    
     welcome_text = (
         "🎵 **Welcome to Music Assistant!**\n\n"
         "I'm a high-performance music streaming bot with:\n"
@@ -316,7 +310,7 @@ async def start_handler(client: Client, message: Message):
     await message.reply_photo(
         photo="https://telegra.ph/file/29f784eb49d230ab62e9e.png",
         caption=welcome_text,
-        reply_markup=get_welcome_keyboard()
+        reply_markup=get_welcome_keyboard(bot_info.username)
     )
 
 @bot.on_message(filters.command("help"))
@@ -333,8 +327,8 @@ async def help_handler(client: Client, message: Message):
         "📋 **Queue:**\n"
         "`/queue` - Show current queue\n"
         "`/leave` - Leave voice chat\n\n"
-        "⚙️ **Admin:**\n"
-        "`/settings` - Bot settings\n"
+        "⚙️ **Info:**\n"
+        "`/ping` - Check bot latency\n"
     )
     await message.reply_text(help_text)
 
@@ -375,22 +369,14 @@ async def play_handler(client: Client, message: Message):
         
         # Check if assistant is in call
         try:
-            call_active = await calls.get_call(chat_id)
+            call_active = calls.get_call(chat_id)
         except Exception:
             call_active = None
-        
-        # Join call if needed
-        if not call_active:
-            await status_msg.edit_text("🔌 Joining voice chat...")
-            join_success = await join_call(chat_id)
-            if not join_success:
-                await status_msg.edit_text("❌ Please start a voice chat first!")
-                return
         
         # Queue or play immediately
         current = queue_manager.get_current(chat_id)
         
-        if current:
+        if current and call_active:
             # Add to queue
             queue_manager.add(chat_id, track_info)
             position = len(queue_manager.get_queue(chat_id))
@@ -404,6 +390,9 @@ async def play_handler(client: Client, message: Message):
             )
         else:
             # Play immediately
+            if not call_active:
+                await status_msg.edit_text("🔌 Joining voice chat...")
+            
             await play_track(chat_id, track_info)
             
             total_time = time.time() - start_time
@@ -460,7 +449,7 @@ async def stop_handler(client: Client, message: Message):
     chat_id = message.chat.id
     
     try:
-        await calls.leave_group_call(chat_id)
+        await calls.leave_call(chat_id)
         queue_manager.clear(chat_id)
         await message.reply_text("⏹ Stopped and cleared queue")
     except Exception as e:
@@ -498,11 +487,20 @@ async def leave_handler(client: Client, message: Message):
     chat_id = message.chat.id
     
     try:
-        await calls.leave_group_call(chat_id)
+        await calls.leave_call(chat_id)
         queue_manager.clear(chat_id)
         await message.reply_text("👋 Left voice chat")
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
+
+@bot.on_message(filters.command("ping"))
+async def ping_handler(client: Client, message: Message):
+    """Check bot latency"""
+    start = time.time()
+    msg = await message.reply_text("🏓 Pinging...")
+    end = time.time()
+    
+    await msg.edit_text(f"🏓 **Pong!**\n⚡ Latency: `{(end-start)*1000:.2f}ms`")
 
 # Callback query handlers for inline buttons
 @bot.on_callback_query()
@@ -519,8 +517,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             "4. Use inline buttons to control playback\n\n"
             "Use /help for full command list"
         )
+        bot_info = await client.get_me()
         await callback.answer()
-        await callback.message.edit_caption(help_text, reply_markup=get_welcome_keyboard())
+        await callback.message.edit_caption(help_text, reply_markup=get_welcome_keyboard(bot_info.username))
         return
     
     # Parse action and chat_id
@@ -548,7 +547,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             await callback.answer("⏭ Skipped", show_alert=False)
             
         elif action == "stop":
-            await calls.leave_group_call(chat_id)
+            await calls.leave_call(chat_id)
             queue_manager.clear(chat_id)
             await callback.answer("⏹ Stopped", show_alert=False)
             
@@ -587,6 +586,7 @@ async def main():
         logger.info(f"✅ Bot started: @{bot_info.username}")
         logger.info(f"✅ Assistant started: @{assistant_info.username}")
         logger.info("🎵 Music Bot is ready!")
+        logger.info("=" * 50)
         
         # Keep alive
         await asyncio.Event().wait()
