@@ -1,61 +1,89 @@
-# Multi-stage build for optimized image size
-FROM python:3.10 AS builder
+# Production-ready Dockerfile with guaranteed dependency installation
+FROM python:3.11-slim as builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Prevent Python from writing pyc files and buffering
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
     libffi-dev \
+    git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
+# Create and activate virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -U pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
 
-# Final stage
+# Copy and install requirements
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
+    pip list && \
+    echo "✅ All dependencies installed successfully"
+
+# ==========================================
+# Final Stage - Production Image
+# ==========================================
 FROM python:3.11-slim
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PORT=8080
+
+# Install runtime dependencies (FFmpeg, curl for health checks)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ffmpeg -version
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Set environment variables
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Verify installations
+RUN python --version && \
+    pip list && \
+    python -c "import pyrogram; print('✅ Pyrogram:', pyrogram.__version__)" && \
+    python -c "import pytgcalls; print('✅ PyTgCalls installed')" && \
+    python -c "import yt_dlp; print('✅ yt-dlp installed')"
 
 # Create app directory
 WORKDIR /app
 
 # Copy application files
 COPY main.py .
-COPY config.py .
-COPY utils.py .
 COPY health_check.py .
+COPY start.sh .
 
-# Create non-root user
+# Make scripts executable
+RUN chmod +x start.sh
+
+# Create non-root user for security
 RUN useradd -m -u 1000 botuser && \
-    chown -R botuser:botuser /app
+    chown -R botuser:botuser /app && \
+    mkdir -p /tmp/pytgcalls /home/botuser/.cache && \
+    chown -R botuser:botuser /tmp/pytgcalls /home/botuser/.cache
 
+# Switch to non-root user
 USER botuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python health_check.py || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
-# Expose health check port
+# Expose port
 EXPOSE 8080
 
-# Start bot with health check server
-CMD ["python", "-u", "main.py"]
+# Start bot
+CMD ["bash", "start.sh"]
