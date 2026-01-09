@@ -1,0 +1,51 @@
+services:
+  # Music Bot - Native Python (No Docker)
+  - type: web
+    name: telegram-music-bot
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: main
+    
+    # Python version
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    
+    # Start command
+    startCommand: python -u main.py
+    
+    # Environment variables
+    envVars:
+      - key: API_ID
+        sync: false
+      
+      - key: API_HASH
+        sync: false
+      
+      - key: BOT_TOKEN
+        sync: false
+      
+      - key: SESSION_STRING
+        sync: false
+      
+      - key: OWNER_ID
+        sync: false
+      
+      - key: PORT
+        value: 8080
+      
+      - key: PYTHON_VERSION
+        value: 3.11.7
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy
+    autoDeploy: true
+    
+    # Disk storage
+    disk:
+      name: bot-storage
+      mountPath: /tmp
+      sizeGB: 1
