@@ -25,7 +25,7 @@ from pyrogram.types import (
 
 from pytgcalls import PyTgCalls
 from pytgcalls.types import Update
-from pytgcalls.exceptions import GroupCallNotFound
+
 
 # Configure logging
 logging.basicConfig(
