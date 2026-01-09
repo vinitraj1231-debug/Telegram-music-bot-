@@ -18,7 +18,6 @@ from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, UserAlreadyParticipant
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pytgcalls import PyTgCalls
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
     NoActiveGroupCall,
