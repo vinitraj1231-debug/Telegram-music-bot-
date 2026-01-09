@@ -5,7 +5,7 @@ services:
   - type: web
     name: telegram-music-bot
     runtime: docker
-    plan: starter
+    plan: free
     region: oregon
     branch: main
     dockerfilePath: Dockerfile
