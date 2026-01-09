@@ -1,14 +1,15 @@
 services:
-  # Main bot service
+  # =========================
+  # Telegram Music Bot Service
+  # =========================
   - type: web
     name: telegram-music-bot
     runtime: docker
-    plan: starter  # Upgrade to standard for better performance
-    region: oregon  # Choose closest region
+    plan: starter
+    region: oregon
     branch: main
-    dockerfilePath: ./Dockerfile
-    
-    # Environment variables (set in Render Dashboard)
+    dockerfilePath: Dockerfile
+
     envVars:
       - key: API_ID
         sync: false
@@ -20,38 +21,35 @@ services:
         sync: false
       - key: OWNER_ID
         sync: false
+
+      # Redis connection (auto injected from redis service)
       - key: REDIS_URL
         fromService:
           type: redis
           name: music-bot-redis
           property: connectionString
+
+      # Optional (only if you use Sentry)
+      - key: SENTRY_DSN
+        sync: false
+
+      # Port for health check / web runtime
       - key: PORT
-        value: 8080
-    
-    # Health check configuration
+        value: "8080"
+
     healthCheckPath: /health
-    
-    # Auto-deploy on push
     autoDeploy: true
-    
-    # Resource allocation for optimal performance
     numInstances: 1
-    
-    # Disk for temporary files
+
     disk:
       name: bot-storage
       mountPath: /tmp
       sizeGB: 1
 
-  # Redis for queue persistence (optional but recommended)
+  # =========================
+  # Redis Service
+  # =========================
   - type: redis
     name: music-bot-redis
-    plan: starter  # Free tier available
+    plan: starter
     region: oregon
-    ipAllowList: []  # Allow all by default, restrict in production
-    
-# Build configuration
-buildCommand: pip install -r requirements.txt
-
-# Start command (if not using Dockerfile CMD)
-# startCommand: python -u main.py
