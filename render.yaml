@@ -1,51 +1,51 @@
 services:
-  # =========================
-  # Telegram Music Bot (Worker)
-  # =========================
+  # Music Bot - Native Python (No Docker)
   - type: web
     name: telegram-music-bot
     runtime: python
     plan: free
     region: oregon
     branch: main
-
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-
+    
+    # Python version
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    
+    # Start command
+    startCommand: python -u main.py
+    
+    # Environment variables
     envVars:
       - key: API_ID
         sync: false
+      
       - key: API_HASH
         sync: false
+      
       - key: BOT_TOKEN
         sync: false
+      
       - key: SESSION_STRING
         sync: false
+      
       - key: OWNER_ID
         sync: false
-
-      # Redis auto connection
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: music-bot-redis
-          property: connectionString
-
-      # Optional error monitoring
-      - key: SENTRY_DSN
-        sync: false
-
+      
+      - key: PORT
+        value: 8080
+      
+      - key: PYTHON_VERSION
+        value: 3.11.7
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy
     autoDeploy: true
-    numInstances: 1
-
-  # =========================
-  # Redis Service
-  # =========================
-  - type: redis
-    name: music-bot-redis
-    plan: free
-    region: oregon
-
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: Allow all
+    
+    # Disk storage
+    disk:
+      name: bot-storage
+      mountPath: /tmp
+      sizeGB: 1
