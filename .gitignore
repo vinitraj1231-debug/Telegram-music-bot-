@@ -1,0 +1,83 @@
+# Environment variables - NEVER COMMIT THESE!
+.env
+.env.local
+.env.*.local
+*.env
+
+# Session files
+*.session
+*.session-journal
+music_bot.session
+assistant.session
+
+# Logs
+*.log
+logs/
+bot.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+cache/
+
+# Downloaded media (if any)
+downloads/
+*.mp3
+*.m4a
+*.opus
+
+# Database (if using)
+*.db
+*.sqlite
+*.sqlite3
+
+# Redis dumps
+dump.rdb
+
+# Render specific
+.render/
+
+# Docker
+.dockerignore
