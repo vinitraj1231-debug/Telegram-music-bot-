@@ -16,13 +16,17 @@ from typing import Dict, Optional
 import yt_dlp
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, UserAlreadyParticipant
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pytgcalls import PyTgCalls
-from pytgcalls.exceptions import (
-    AlreadyJoinedError,
-    NoActiveGroupCall,
+from pyrogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
 )
-from pytgcalls.types import AudioPiped, Update
+
+from pytgcalls import PyTgCalls
+from pytgcalls.types.input_stream import AudioPiped
+from pytgcalls.types import Update
+from pytgcalls.exceptions import GroupCallNotFound
 
 # Configure logging
 logging.basicConfig(
