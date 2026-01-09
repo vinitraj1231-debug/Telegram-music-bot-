@@ -20,7 +20,6 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from pytgcalls import PyTgCalls, StreamType
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
-    NotInCallError,
     NoActiveGroupCall,
 )
 from pytgcalls.types import AudioPiped, Update
