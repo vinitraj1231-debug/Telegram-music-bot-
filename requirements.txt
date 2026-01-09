@@ -1,8 +1,8 @@
 # Core dependencies
 pyrogram==2.0.106
 tgcrypto==1.2.5
-py-tgcalls==0.9.7
-yt-dlp
+py-tgcalls==2.2.8
+yt-dlp==2024.12.23
 
 # Audio processing
 ffmpeg-python==0.2.0
