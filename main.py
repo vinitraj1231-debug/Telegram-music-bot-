@@ -24,7 +24,6 @@ from pyrogram.types import (
 )
 
 from pytgcalls import PyTgCalls
-from pytgcalls.types.input_stream import AudioPiped
 from pytgcalls.types import Update
 from pytgcalls.exceptions import GroupCallNotFound
 
