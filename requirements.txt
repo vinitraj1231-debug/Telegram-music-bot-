@@ -2,7 +2,7 @@
 pyrogram==2.0.106
 tgcrypto==1.2.5
 py-tgcalls==0.9.7
-yt-dlp==2024.8.6
+yt-dlp
 
 # Audio processing
 ffmpeg-python==0.2.0
