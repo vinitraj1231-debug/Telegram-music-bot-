@@ -1,14 +1,16 @@
 services:
   # =========================
-  # Telegram Music Bot Service
+  # Telegram Music Bot (Worker)
   # =========================
   - type: web
     name: telegram-music-bot
-    runtime: docker
+    runtime: python
     plan: free
     region: oregon
     branch: main
-    dockerfilePath: Dockerfile
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
 
     envVars:
       - key: API_ID
@@ -33,15 +35,11 @@ services:
       - key: SENTRY_DSN
         sync: false
 
-      - key: PORT
-        value: "8080"
-
-    healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
 
   # =========================
-  # Redis Service (Required)
+  # Redis Service
   # =========================
   - type: redis
     name: music-bot-redis
@@ -50,4 +48,4 @@ services:
 
     ipAllowList:
       - source: 0.0.0.0/0
-        description: Allow all (free tier)
+        description: Allow all
